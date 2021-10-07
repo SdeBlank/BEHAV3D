@@ -1,0 +1,22 @@
+# Paths
+data_dir: "/Users/samdeblank/Documents/1.projects/tcell_paper/unprocessed/2021-06-10_WT1_n1/1.data/"
+output_dir: "/Users/samdeblank/Documents/1.projects/tcell_paper/unprocessed/2021-06-10_WT1_n1/2.analysis/"
+metadata_csv_path: "/Users/samdeblank/OneDrive - Prinses Maxima Centrum/github/BEHAV3D-forked/configs/metadata_template.tsv"
+randomforest_path: "/Users/samdeblank/OneDrive - Prinses Maxima Centrum/github/BEHAV3D-forked/references/TrainedRandomForest.Rdata"
+reference_map_path: "/Users/samdeblank/OneDrive - Prinses Maxima Centrum/github/BEHAV3D-forked/scripts/T cell dynamics classification/Behavioral reference map/Behavioral_Referance_map_git"
+
+# Channel information
+organoid_channel: 3
+dist_org_channel: 8
+
+# Track metadata
+#From CD4_CD8_4_6_hours_beh_import.R line 159
+
+# Take cells interacting at specific timepoint - CD4_CD8_4_6_hours_beh_import.R line 162
+incubation_selection: 155
+# Select only cells with track-length longer than min_track_length (in timepoints) - CD4_CD8_4_6_hours_beh_import.R line 162
+min_track_length: 59
+# Select only cells with track-length longer than min_track_length (in timepoints) - CD4_CD8_4_6_hours_beh_import.R line 162
+# max_track_length:
+# Nr. of timepoints to take from the end of a cells track - CD4_CD8_4_6_hours_beh_import.R line 173
+track_length_cutoff: 100

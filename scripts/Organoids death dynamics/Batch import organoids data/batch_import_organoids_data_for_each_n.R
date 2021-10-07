@@ -1,13 +1,16 @@
 library(plyr)
 library(readr)
 library(dplyr)
+library(yaml)
 
 read_plus <- function(flnm) {
   read_csv(flnm, skip=3) %>% 
     mutate(filename = flnm)
 }
-setwd("DIRECTORY_THAT_CONTAINS_example_data_set_organoids")  ## set here your working directory that contains the example dataset
-working_directory <- "example_data_set_organoids"
+
+pars = yaml.load_file("/Users/samdeblank/OneDrive - Prinses Maxima Centrum/github/BEHAV3D/configs/config_template.yml")
+setwd(pars$output_dir)  ## set here your working directory that contains the example dataset
+working_directory <- pars$data_dir
 
 # import volumes
 pat = "*Volume"
@@ -67,6 +70,8 @@ live_deadROI3 <- live_deadROI3[complete.cases(live_deadROI3), ]
 live_deadROI3$Org <- gsub("/", "", live_deadROI3$Org)
 live_deadROI3$Org <- gsub("\\(", "", live_deadROI3$Org)
 live_deadROI3$Org <- gsub("\\)", "", live_deadROI3$Org)
+live_deadROI3$Org <- gsub("\\[", "", live_deadROI3$Org)
+live_deadROI3$Org <- gsub("\\]", "", live_deadROI3$Org)
 
 live_deadROI3$exp <- live_deadROI3$Org  ## for rthe experiemtnal batch
 live_deadROI3$type <- live_deadROI3$exp  ## for the Orgtype LM1 or TEG
@@ -164,5 +169,5 @@ Plot <- ggplot(live_deadROI6, aes(Time2,red, color = Track2, group = Track2)) +
 ggtitle("Individual org increase in dead dye intensity TEG")
 
 Plot
- ### SAVE Dataframe for later processing
+### SAVE Dataframe for later processing
 saveRDS(live_deadROI6, file = "Individual_orgs_death_dynamics")  ### save here a dataframe with all the organoids values
