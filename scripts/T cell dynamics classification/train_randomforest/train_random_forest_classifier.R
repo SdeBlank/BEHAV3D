@@ -6,7 +6,7 @@ library(randomForest)
 library(ggplot2)
 ## Import reference map that will be used as the ground truth dataset to train and test a random forest classifier
 
-pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Stats reports/t cells/2021-08-11_ror1_CART_n3/BEHAV3D_config.yml")
+pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/WT1_pooled/BEHAV3D_config.yml")
 
 reference_map <- pars$reference_map
 model_path <- pars$randomforest_path

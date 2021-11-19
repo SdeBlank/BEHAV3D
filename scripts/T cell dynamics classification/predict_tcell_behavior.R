@@ -10,11 +10,36 @@ library(sp)
 library(stats)
 library(yaml)
 
-pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Stats reports/t cells/2021-08-11_ror1_CART_n3/BEHAV3D_config.yml")
+### Checks if being run in GUI (e.g. Rstudio) or command line
+if (interactive()) {
+  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/ROR1_CART_pooled//BEHAV3D_config.yml")
+  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Stats reports/t cells/2021-10-5_TEG_H&N_DMG//BEHAV3D_config.yml")
+  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Stats reports/t cells/2021-06-10_WT1_n1/BEHAV3D_config.yml")
+  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Stats reports/t cells/2021-06-22_FD_WTn2_Stats//BEHAV3D_config.yml")
+  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/WT1_pooled/BEHAV3D_config.yml")
+  pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/ROR1_CART_pooled/DeadCellThr_exp/thr100/BEHAV3D_config.yml")
+} else {
+  args <- commandArgs(trailingOnly = TRUE)
+  pars <- yaml.load_file(args[1])
+}
 
-## set directories where the files are located
-working_directory <- pars$data_dir
-setwd(working_directory)
+count_tracks = function (track_table){
+  nr_tracks_unfilt=track_table
+  nr_tracks_unfilt$name = paste(nr_tracks_unfilt$organoid_line, nr_tracks_unfilt$exp_nr, nr_tracks_unfilt$well)
+  nr_tracks_unfilt = nr_tracks_unfilt %>% 
+    group_by(name, organoid_line) %>% 
+    dplyr::summarize(
+      nr_tracks=length(unique(TrackID))
+    ) %>% 
+    ungroup()
+}
+
+print(pars)
+
+# ### set directories where the files are located
+# working_directory <- pars$data_dir
+# setwd(working_directory)
+
 output_dir=paste0(pars$output_dir,"/")
 model_path <- pars$randomforest
 
@@ -24,38 +49,59 @@ model_path <- pars$randomforest
 
 # Import file-specific metadata for all images used in this analysis.
 pat = pars$metadata_csv
-metadata=read.csv(pars$metadata_csv, sep="\t")
+metadata=read.csv(pars$metadata_csv, sep="\t", check.names=FALSE)
+
+track_counts=metadata
+track_counts$name = paste(metadata$organoid_line, metadata$exp_nr, metadata$well)
+track_counts=track_counts[,c("name", "organoid_line")]
+
+if ( any(is.na(metadata$stat_folder)) ){
+  metadata$stat_folder=apply(metadata, 1, function(x) paste0(pars$data_dir, x["basename"], "_Statistics"))
+}
 
 # Function to import organoid data specifically from Imaris generated csv files
-read_ims_csv <- function(pattern, recursive=TRUE) {
+read_ims_csv <- function(stat_folder, pattern) {
   read_plus <- function(flnm) {
     read_csv(flnm, skip = 3, col_types = cols()) %>% 
       mutate(filename = flnm)
   }
-  files <- list.files(path = working_directory, pattern = pattern,  recursive = recursive)
-  ims_csv <- ldply(files, read_plus)
+  pattern_file <- list.files(path = stat_folder, pattern = pattern, full.names=TRUE)
+  print(pattern_file)
+  ims_csv <- read_plus(pattern_file)
   return(ims_csv)
 }
 
+# read_ims_csv_folder <- function(pattern, recursive=TRUE) {
+#   read_plus <- function(flnm) {
+#     read_csv(flnm, skip = 3, col_types = cols()) %>%
+#       mutate(filename = flnm)
+#   }
+#   files <- list.files(path = working_directory, pattern = pattern,  recursive = recursive)
+#   ims_csv <- ldply(files, read_plus)
+#   return(ims_csv)
+# }
+
+stat_folders <- metadata$stat_folder
+
 # import Displacement^2
 pat = "*Displacement"
-displacement <- read_ims_csv(pattern=pat)
+displacement=ldply(stat_folders, read_ims_csv, pattern=pat)
 
 # import Speed
 pat = "*Speed"
-speed <- read_ims_csv(pattern=pat)
+speed <- ldply(stat_folders, read_ims_csv, pattern=pat)
 
 # import mean dead dye intensity values
-pat = "*Intensity_Mean_Ch=3_Img=1"
-red_lym <- read_ims_csv(pattern=pat)
+pat = paste0("*Intensity_Mean_Ch=", pars$dead_dye_channel, "_Img=1")
+red_lym <- ldply(stat_folders, read_ims_csv, pattern=pat)
 
 # import Minimal distance to organoids
-pat = "*dist_org"
-dist_org <- read_ims_csv(pattern=pat)
+pat = paste0("*Intensity_Min_Ch=", pars$dist_org_channel, "_Img=1")
+dist_org <- ldply(stat_folders, read_ims_csv, pattern=pat)
 
 # import Position
 pat = "*Position"
-pos <- read_ims_csv(pattern=pat)
+pos <- ldply(stat_folders, read_ims_csv, pattern=pat)
 
 ### Join all Imaris information
 master <- cbind(
@@ -89,19 +135,25 @@ master$filename<-NULL
 ### save RDS for later use (e.g. Backprojection of classified TrackIDs)
 saveRDS(master, paste0(output_dir,"raw_tcell_track_data.rds"))
 
+track_counts=left_join(track_counts, count_tracks(master))
+colnames(track_counts)[colnames(track_counts)=="nr_tracks"]="nr_tracks_unfiltered"
+
 ###############################
 ####### Data processing #######
 ###############################
 
 detach("package:reshape2", unload=TRUE)
 detach("package:plyr", unload=TRUE)
+pars$exp_duration
 
-###!!! VARIABLE
-master <- master[which(master$Time<=300), ] ##Make sure that all the time-series have the same length, in this case 10hours
+master <- master[which(master$Time<=pars$exp_duration), ] ##Make sure that all the time-series have the same length, in this case 10hours
+
+track_counts=left_join(track_counts, count_tracks(master))
+colnames(track_counts)[colnames(track_counts)=="nr_tracks"]="nr_tracks_exp_duration_filtered"
 
 ### Perform check for duplciates, should be empty
 data_dup <- master%>%group_by(Time)%>%
-  count(TrackID2) %>% 
+  dplyr::count(TrackID2) %>% 
   filter(n > 1) %>% 
   select(-n)
 
@@ -137,8 +189,7 @@ master_dist<-do.call(rbind, List2)
 colnames(master_dist)[which(names(master_dist) == "dist")] <- "nearest_Tcell"
 
 ### Create a binary variable for Tcell contact based on distance
-# VARIABLE
-master_dist$contact_lym<- ifelse(master_dist$nearest_Tcell<10,1,0)
+master_dist$contact_lym<- ifelse(master_dist$nearest_Tcell<pars$tcell_contact_thr,1,0)
 
 ### Remove the variable TrackID and only use unique TrackID2 (unique identifier instead)
 master_dist$TrackID<-master_dist$TrackID2
@@ -234,18 +285,28 @@ detach("package:reshape2", unload=TRUE)
 detach("package:plyr", unload=TRUE)
 
 master_corrected2<-master_corrected1 %>% 
-  group_by(TrackID) %>%arrange(TrackID)%>% filter(Time>00&Time<300)%>% filter(n() > 99)
+  group_by(TrackID) %>% arrange(TrackID)%>% filter(Time>00&Time<pars$exp_duration)%>% filter(n() >= pars$min_track_length)
+
+track_counts=left_join(track_counts, count_tracks(master_corrected2))
+colnames(track_counts)[colnames(track_counts)=="nr_tracks"]="nr_tracks_min_track_filt"
+
 ### Create a variable for the relative Time
 master_corrected2<-master_corrected2 %>% 
   group_by(TrackID) %>%arrange(Time)%>%mutate(Time2 = Time - first(Time))
 ### For the Tracks that have more then 100 timepoints filter only the first 100.
 master_corrected2<-master_corrected2 %>% 
-  group_by(TrackID) %>%arrange(TrackID)%>% filter(Time2<100)
+  group_by(TrackID) %>%arrange(TrackID)%>% filter(Time2<pars$max_track_length)
+
 ### To exclude noise due to dead cells remove the dead t cells from the beginning
-master_corrected3deadT0 <-master_corrected2%>%group_by(TrackID)%>%filter((Time2==0) & red_lym<10 )
+# master_corrected3 <- master_corrected2
+master_corrected3deadT0 <-master_corrected2%>%group_by(TrackID)%>%filter((Time2==0) & red_lym<pars$dead_tcell_thr )
 master_corrected3 <-master_corrected2%>%filter(TrackID %in% master_corrected3deadT0$TrackID )
+
+track_counts=left_join(track_counts, count_tracks(master_corrected3))
+colnames(track_counts)[colnames(track_counts)=="nr_tracks"]="nr_tracks_deadstart_cells_filt"
+
 ### Create a binary variable for live or dead cells:
-master_corrected3$death<- ifelse(master_corrected3$red_lym<10,0,1)
+master_corrected3$death<- ifelse(master_corrected3$red_lym<pars$dead_tcell_thr,0,1)
 ### Create a variable for cumulative interaction with organoids
 master_corrected3<-master_corrected3 %>% 
   group_by(TrackID) %>%mutate(contact2=(ave(contact, cumsum(!contact), FUN = cumsum)))
@@ -257,6 +318,28 @@ master_corrected3<-master_corrected3%>%group_by(exp_nr)%>%mutate(contact_lym=ife
 ### Save processed data on the tcells for possible further analysis
 saveRDS(master_corrected3, file = paste0(output_dir,"processed_tcell_track_data.rds"))
 
+write.table(track_counts, file=paste0(output_dir, "nr_of_tracks_after_filtering.tsv"), sep="\t", row.names=FALSE)
+
+library(reshape2)
+melted_track_counts = melt(track_counts)
+detach("package:reshape2", unload=TRUE)
+ggplot(melted_track_counts, aes(x=name, y=value, fill=variable)) + 
+  geom_col(width=0.75, position="dodge") + 
+  theme_bw() + 
+  # facet_wrap(~name, ncol=4)+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  ylab("# Tracks") +
+  xlab("Experiment")
+
+ggsave(paste0(output_dir,"NrCellTracks_filtering_perExp.png"), device="png")
+
+ggplot(melted_track_counts, aes(x=name, y=value, fill=organoid_line)) + 
+  facet_wrap(~variable, nrow=1)+
+  geom_bar(stat="identity") + 
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+ggsave(paste0(output_dir,"NrCellTracks_filtering_perFilt.png"), device="png")
 ###############################
 ##### Behavior prediction #####
 ###############################
@@ -283,7 +366,7 @@ tryCatch(
 master_test<-readRDS(paste0(output_dir, "processed_tcell_track_data.rds"))
 ### Normalize the data
 master_test2<-master_test%>% ungroup()%>%
-  group_by(exp_nr) %>% 
+  # group_by(exp_nr) %>% 
   mutate(z.disp = (displacement-mean(displacement))/sd(displacement),z.speed = (speed-mean(speed))/sd(speed), z.red = (red_lym-mean(red_lym))/sd(red_lym))%>%
   mutate(q.disp=ifelse(z.disp>(quantile(z.disp, p=0.75)),z.disp,min(z.disp)), q.speed=ifelse(z.speed>(quantile(z.speed, p=0.75)),z.speed,min(z.speed)),q.red=ifelse(z.red>(quantile(z.red, p=0.75)),z.red,min(z.red)))%>%
   mutate(q.disp=rescale(q.disp, to=c(0,100)),q.speed=rescale(q.speed, to=c(0,100)),q.red=rescale(q.red, to=c(0,100)),s.contact=rescale(contact, to=c(0,1)),s.contact_lym=rescale(contact_lym, to=c(0,1)))%>%
@@ -315,18 +398,22 @@ classified_tracks$cluster2<-classified_tracks$cluster
 classified_tracks<-left_join(classified_tracks,cell_ID)
 classified_tracks<-classified_tracks%>%arrange(cluster2)
 
+saveRDS(classified_tracks, file = paste0(output_dir,"classified_tcell_track_data.rds"))
+
 ### Quantify the number of cells per well
-Number_cell_exp<-classified_tracks%>%group_by(well)%>%
+Number_cell_exp<-classified_tracks%>%group_by(well, exp_nr, tcell_line, organoid_line)%>%
   summarise(total_cell = n())
 Percentage_clus<-left_join(Number_cell_exp,classified_tracks)
 Percentage_clus <- Percentage_clus%>%group_by(cluster2,tcell_line, well,exp_nr, organoid_line)%>%
   summarise(total_cell = mean(total_cell), num_cluster=n())%>%mutate(percentage=num_cluster*100/total_cell)%>%ungroup()
 
+saveRDS(Percentage_clus, file = paste0(output_dir,"cluster_perc_tcell_track_data.rds"))
 ### Plot proportion per well and per cell type
 Per<-ggplot(Percentage_clus, aes(fill=as.factor(cluster2), y=percentage, x="")) + 
   geom_bar( stat="identity", position="fill")+ coord_flip()+ scale_y_reverse()
-Per <- Per + facet_grid(interaction(exp_nr,well,organoid_line)  ~ interaction(organoid_line,tcell_line))
-Per<-Per+theme_void()+ scale_fill_manual(values=c("gold3",
+Per <- Per + facet_grid(interaction(exp_nr,well,organoid_line)  ~ tcell_line)
+# Per <- Per + facet_grid(interaction(exp_nr,well,organoid_line)  ~ interaction(organoid_line,tcell_line))
+Per<-Per+theme_void() + scale_fill_manual(values=c("gold3",
                                                   "darkolivegreen3",
                                                   "seagreen3",
                                                   "forestgreen",
@@ -334,11 +421,12 @@ Per<-Per+theme_void()+ scale_fill_manual(values=c("gold3",
                                                   "cyan1",
                                                   "indianred",
                                                   "firebrick",
-                                                  "brown1"))+theme(aspect.ratio = 1,strip.text.x = element_text(angle = 90))
+                                                  "brown1"))+theme(aspect.ratio = 0.2,strip.text.x = element_text(angle = 90))
+
 Per
 
 ggsave(paste0(output_dir,"RF_ClassProp_WellvsCelltype.png"), device="png")
-
+ggsave(paste0(output_dir,"RF_ClassProp_WellvsCelltype.pdf"), device="pdf")
 
 ### Run a chisq.test to see if the distibution is different between conditions
 library(reshape2)
