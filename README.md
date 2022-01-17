@@ -23,7 +23,7 @@ The current version of the pipeline works with objects (cells or organoids) time
 In this repository we provide an example dataset consisting of a multispectral time-lapse 3D imaging dataset originated from a co-culture of engeneered T cells and Tumor derived organoids. Multispectral imaging allows to identify: Live/dead T cells; Live/Dead organoids. For downstream analysis of organoids: either individual tumor derived organoids are tracked overtime or the total organoid volume per well is tracked. For each generated object we acquire information on the dead cell dye intensity and position and volume of individual organoids. For downstream analysis of T cell: T cells are tracked overtime. For each Tracked T cell object we aquire, position per timepoint, speed, square displacement, distance to an organoid, dead dye intensity, major and minor axis length (used in some downstream analysis).
 ## Repository
 This repository contains a collection of scripts and example datasets enabling the following dowstream analysis. Follow the structure in the script folder for each module and each analysis type. Introduce the corresponding folder/ file direction on your own computer where required (note that to specify directory paths in R (/) forward slash is recommended):
-### (1) Organoids death dynamics module
+## (1) Organoids death dynamics module
 - Batch import tracked organoids data: 
 
 -Run script [batch_import_organoids_data_for_each_n](https://github.com/alievakrash/BEHAV3D/blob/main/scripts/Organoids%20death%20dynamics/Batch%20import%20organoids%20data/batch_import_organoids_data_for_each_n.R)
@@ -45,7 +45,7 @@ Output files: [Full_well_death_dynamics.rds](https://github.com/alievakrash/BEHA
 
 -Insert [here](https://github.com/alievakrash/BEHAV3D/blob/81ab7207a48fb60f8467737e5aa2e85f643f054d/scripts/Organoids%20death%20dynamics/Individual%20organoids%20death%20dynamics/Individual%20organoids%20death%20dynamics.R#L4) the direction of the processed dataframe [Individual_orgs_death_dynamics.rds](https://github.com/alievakrash/BEHAV3D/blob/553db58a0116559817b9f2109333cf4f7e58f4da/scripts/Organoids%20death%20dynamics/Test%20dataset/Individual_organoids_death_dynamics)
 
-### (2) T cell behavior classification module
+## (2) T cell behavior classification module
 The T cell behavior classification module requires a configuration files that describes the BEHAV3D experiment:\
 BEHAV3D/configs/config_tempalte.yml
 
@@ -92,7 +92,7 @@ Backproject behavioral signatures in the imaging dataset:
 Train the random forest, using the path to the behavioral reference map provided in the config.yml:
 - BEHAV3D/scripts/T cell dynamics classification/train_randomforest/train_random_forest_classifier.R
 
-### (3) Behavior-guided transcriptomics module
+## (3) Behavior-guided transcriptomics module
 This module integrates information from single cell sequencing and behavioral profiling, by predicting in a behavioral phenotype of single cells in scRNA seq data. For more information see Figure 4 in https://www.biorxiv.org/content/10.1101/2021.05.05.442764v2
 
 - Predict in silico the proportions of cells with different behavioral signatures in different experimental groups [non-engaged, non-engaged enriched, engaged, super-engaged]
