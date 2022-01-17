@@ -4,6 +4,7 @@ library(tidyr)
 library(scales)
 library(randomForest)
 library(ggplot2)
+library(yaml)
 ## Import reference map that will be used as the ground truth dataset to train and test a random forest classifier
 
 pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/WT1_pooled/BEHAV3D_config.yml")

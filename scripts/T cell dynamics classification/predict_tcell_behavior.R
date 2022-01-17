@@ -12,12 +12,15 @@ library(yaml)
 
 ### Checks if being run in GUI (e.g. Rstudio) or command line
 if (interactive()) {
+  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/versus_percentage_plot/BEHAV3D_config.yml")
+  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/WT1_pooled/BEHAV3D_config.yml")
+  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/WT1_unfiltered/BEHAV3D_config.yml")
   # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/ROR1_CART_pooled//BEHAV3D_config.yml")
-  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Stats reports/t cells/2021-10-5_TEG_H&N_DMG//BEHAV3D_config.yml")
+  pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/TEG_DMG_106T_pooled/BEHAV3D_config.yml")
+   # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Stats reports/t cells/2021-10-5_TEG_H&N_DMG//BEHAV3D_config.yml")
   # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Stats reports/t cells/2021-06-10_WT1_n1/BEHAV3D_config.yml")
   # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Stats reports/t cells/2021-06-22_FD_WTn2_Stats//BEHAV3D_config.yml")
-  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/WT1_pooled/BEHAV3D_config.yml")
-  pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/ROR1_CART_pooled/DeadCellThr_exp/thr100/BEHAV3D_config.yml")
+  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/ROR1_CART_pooled/DeadCellThr_exp/thr100/BEHAV3D_config.yml")
 } else {
   args <- commandArgs(trailingOnly = TRUE)
   pars <- yaml.load_file(args[1])
@@ -136,7 +139,7 @@ master$filename<-NULL
 saveRDS(master, paste0(output_dir,"raw_tcell_track_data.rds"))
 
 track_counts=left_join(track_counts, count_tracks(master))
-colnames(track_counts)[colnames(track_counts)=="nr_tracks"]="nr_tracks_unfiltered"
+colnames(track_counts)[colnames(track_counts)=="nr_tracks"]="unfiltered"
 
 ###############################
 ####### Data processing #######
@@ -149,7 +152,7 @@ pars$exp_duration
 master <- master[which(master$Time<=pars$exp_duration), ] ##Make sure that all the time-series have the same length, in this case 10hours
 
 track_counts=left_join(track_counts, count_tracks(master))
-colnames(track_counts)[colnames(track_counts)=="nr_tracks"]="nr_tracks_exp_duration_filtered"
+colnames(track_counts)[colnames(track_counts)=="nr_tracks"]="filt_exp_duration"
 
 ### Perform check for duplciates, should be empty
 data_dup <- master%>%group_by(Time)%>%
@@ -288,7 +291,7 @@ master_corrected2<-master_corrected1 %>%
   group_by(TrackID) %>% arrange(TrackID)%>% filter(Time>00&Time<pars$exp_duration)%>% filter(n() >= pars$min_track_length)
 
 track_counts=left_join(track_counts, count_tracks(master_corrected2))
-colnames(track_counts)[colnames(track_counts)=="nr_tracks"]="nr_tracks_min_track_filt"
+colnames(track_counts)[colnames(track_counts)=="nr_tracks"]="filt_minLength"
 
 ### Create a variable for the relative Time
 master_corrected2<-master_corrected2 %>% 
@@ -299,11 +302,24 @@ master_corrected2<-master_corrected2 %>%
 
 ### To exclude noise due to dead cells remove the dead t cells from the beginning
 # master_corrected3 <- master_corrected2
+red_lym_over_time=master_corrected2
+red_lym_over_time$name=paste(master_corrected2$organoid_line, master_corrected2$exp_nr, master_corrected2$well)
+ggplot(red_lym_over_time[red_lym_over_time$Time==1,], aes(x=Time, y=red_lym))+
+  geom_violin(aes(fill=name))+
+  geom_jitter()+
+  facet_grid(~name)+
+  theme_bw()
+
+ggsave(
+  paste0(output_dir,"RedLym_distribution.png"), 
+  device="png", height=210, width=297, units="mm"
+)
+
 master_corrected3deadT0 <-master_corrected2%>%group_by(TrackID)%>%filter((Time2==0) & red_lym<pars$dead_tcell_thr )
 master_corrected3 <-master_corrected2%>%filter(TrackID %in% master_corrected3deadT0$TrackID )
 
 track_counts=left_join(track_counts, count_tracks(master_corrected3))
-colnames(track_counts)[colnames(track_counts)=="nr_tracks"]="nr_tracks_deadstart_cells_filt"
+colnames(track_counts)[colnames(track_counts)=="nr_tracks"]="filt_DeadCellStart"
 
 ### Create a binary variable for live or dead cells:
 master_corrected3$death<- ifelse(master_corrected3$red_lym<pars$dead_tcell_thr,0,1)
@@ -327,19 +343,22 @@ ggplot(melted_track_counts, aes(x=name, y=value, fill=variable)) +
   geom_col(width=0.75, position="dodge") + 
   theme_bw() + 
   # facet_wrap(~name, ncol=4)+
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), aspect.ratio=0.75) +
   ylab("# Tracks") +
   xlab("Experiment")
 
-ggsave(paste0(output_dir,"NrCellTracks_filtering_perExp.png"), device="png")
+ggsave(
+  paste0(output_dir,"NrCellTracks_filtering_perExp.png"), 
+       device="png", height=210, width=297, units="mm"
+  )
 
 ggplot(melted_track_counts, aes(x=name, y=value, fill=organoid_line)) + 
-  facet_wrap(~variable, nrow=1)+
+  facet_grid(~variable)+
   geom_bar(stat="identity") + 
   theme_bw() + 
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
-ggsave(paste0(output_dir,"NrCellTracks_filtering_perFilt.png"), device="png")
+ggsave(paste0(output_dir,"NrCellTracks_filtering_perFilt.png"), device="png", height=210, width=297, units="mm")
 ###############################
 ##### Behavior prediction #####
 ###############################
@@ -365,12 +384,15 @@ tryCatch(
 #### Import new dataset to predict behavior (e.g. import dataset called "master_corrected3_example")
 master_test<-readRDS(paste0(output_dir, "processed_tcell_track_data.rds"))
 ### Normalize the data
+
 master_test2<-master_test%>% ungroup()%>%
-  # group_by(exp_nr) %>% 
+  # group_by(tcell_line, organoid_line, exp_nr, well) %>%
+  group_by(exp_nr) %>%
   mutate(z.disp = (displacement-mean(displacement))/sd(displacement),z.speed = (speed-mean(speed))/sd(speed), z.red = (red_lym-mean(red_lym))/sd(red_lym))%>%
   mutate(q.disp=ifelse(z.disp>(quantile(z.disp, p=0.75)),z.disp,min(z.disp)), q.speed=ifelse(z.speed>(quantile(z.speed, p=0.75)),z.speed,min(z.speed)),q.red=ifelse(z.red>(quantile(z.red, p=0.75)),z.red,min(z.red)))%>%
   mutate(q.disp=rescale(q.disp, to=c(0,100)),q.speed=rescale(q.speed, to=c(0,100)),q.red=rescale(q.red, to=c(0,100)),s.contact=rescale(contact, to=c(0,1)),s.contact_lym=rescale(contact_lym, to=c(0,1)))%>%
-  mutate(q.disp=q.disp/mean(quantile(q.disp, p=0.9999)),q.speed=q.speed/mean(quantile(q.speed, p=0.9999)),q.red=q.red/mean(quantile(q.red, p=0.9999)))%>%ungroup()
+  mutate(q.disp=q.disp/mean(quantile(q.disp, p=0.9999)),q.speed=q.speed/mean(quantile(q.speed, p=0.9999)),q.red=q.red/mean(quantile(q.red, p=0.9999)))%>%
+  ungroup()
 
 ### Calculate time-series descriptive statistics
 test_dataset <- master_test2%>%group_by(TrackID)%>% arrange(Time)%>%
@@ -407,11 +429,53 @@ Percentage_clus<-left_join(Number_cell_exp,classified_tracks)
 Percentage_clus <- Percentage_clus%>%group_by(cluster2,tcell_line, well,exp_nr, organoid_line)%>%
   summarise(total_cell = mean(total_cell), num_cluster=n())%>%mutate(percentage=num_cluster*100/total_cell)%>%ungroup()
 
+### Add clusters that don't exist for experiments to the percentage table
+
+for (cluster in unique(Percentage_clus$cluster2)){
+  for (row in 1:nrow(Percentage_clus)) {
+    tcell_line = as.character(Percentage_clus[row, "tcell_line"])
+    organoid_line = as.character(Percentage_clus[row, "organoid_line"])
+    well = as.character(Percentage_clus[row, "well"])
+    exp = as.integer(Percentage_clus[row, "exp_nr"])
+    total_cell = as.integer(Number_cell_exp[
+      Number_cell_exp$tcell_line==tcell_line &
+      Number_cell_exp$well==well &
+      Number_cell_exp$exp_nr==exp &
+      Number_cell_exp$organoid_line==organoid_line, "total_cell"
+    ])
+    if (
+      dim(
+              Percentage_clus[Percentage_clus$cluster2==cluster &
+              Percentage_clus$tcell_line==tcell_line &
+              Percentage_clus$well==well &
+              Percentage_clus$exp_nr==exp &
+              Percentage_clus$organoid_line==organoid_line,]
+      )[1]==0
+    ){
+      extra_row=data.frame(
+        cluster2=cluster,
+        tcell_line=tcell_line,
+        well=well,
+        exp_nr=exp,
+        organoid_line=organoid_line,
+        total_cell=total_cell,
+        num_cluster=0,
+        percentage=0
+      )
+      Percentage_clus<-rbind(Percentage_clus, extra_row)
+    }
+  }
+}
+
 saveRDS(Percentage_clus, file = paste0(output_dir,"cluster_perc_tcell_track_data.rds"))
 ### Plot proportion per well and per cell type
+Percentage_clus$tcell_line = as.factor(Percentage_clus$tcell_line)
+
 Per<-ggplot(Percentage_clus, aes(fill=as.factor(cluster2), y=percentage, x="")) + 
   geom_bar( stat="identity", position="fill")+ coord_flip()+ scale_y_reverse()
-Per <- Per + facet_grid(interaction(exp_nr,well,organoid_line)  ~ tcell_line)
+Per <- Per + facet_grid(interaction(tcell_line, exp_nr,well,organoid_line)  ~ tcell_line)
+# Per <- Per + facet_grid(exp_nr + well + organoid_line  ~ tcell_line)
+
 # Per <- Per + facet_grid(interaction(exp_nr,well,organoid_line)  ~ interaction(organoid_line,tcell_line))
 Per<-Per+theme_void() + scale_fill_manual(values=c("gold3",
                                                   "darkolivegreen3",
@@ -421,19 +485,10 @@ Per<-Per+theme_void() + scale_fill_manual(values=c("gold3",
                                                   "cyan1",
                                                   "indianred",
                                                   "firebrick",
-                                                  "brown1"))+theme(aspect.ratio = 0.2,strip.text.x = element_text(angle = 90))
+                                                  "brown1"))+
+  theme(aspect.ratio = 0.2,strip.text.x = element_text(angle = 90))
 
 Per
 
 ggsave(paste0(output_dir,"RF_ClassProp_WellvsCelltype.png"), device="png")
 ggsave(paste0(output_dir,"RF_ClassProp_WellvsCelltype.pdf"), device="pdf")
-
-### Run a chisq.test to see if the distibution is different between conditions
-library(reshape2)
-table1<-acast(Percentage_clus, cluster2~tcell_line, value.var = "percentage")
-table1[is.na(table1)]<-0  ## If any cluster are missing convert NA to 0
-
-## Run Pearson Chi sq test to see if there is a different distribution of clusters between cell types
-chisq.test(table1)
-
-
