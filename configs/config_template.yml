@@ -7,11 +7,6 @@
 output_dir: "/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/ror1_cart_combined/1.analysis"
 metadata_csv_path: "/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/ror1_cart_combined/ror1_cart_combined_metadata.txt"
 
-### Channel information
-# organoid_channel: 3
-dead_dye_channel: 3
-dist_org_channel: 8
-
 ### Track metadata
 #From CD4_CD8_4_6_hours_beh_import.R line 159
 
