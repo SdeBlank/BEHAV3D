@@ -12,16 +12,12 @@ library(yaml)
 
 ### Checks if being run in GUI (e.g. Rstudio) or command line
 if (interactive()) {
-  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/versus_percentage_plot/BEHAV3D_config.yml")
-  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/WT1_pooled/BEHAV3D_config.yml")
-  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/WT1_unfiltered/BEHAV3D_config.yml")
-  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/ROR1_CART_pooled//BEHAV3D_config.yml")
-  pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/TEG_DMG_106T_pooled/BEHAV3D_config.yml")
-   # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Stats reports/t cells/2021-10-5_TEG_H&N_DMG//BEHAV3D_config.yml")
-  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Stats reports/t cells/2021-06-10_WT1_n1/BEHAV3D_config.yml")
-  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Stats reports/t cells/2021-06-22_FD_WTn2_Stats//BEHAV3D_config.yml")
-  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/T cell paper/Revision_nature_biotech/Sam_analysis/ROR1_CART_pooled/DeadCellThr_exp/thr100/BEHAV3D_config.yml")
-} else {
+  ### Change the path to the BEHAV3D_config file here if running the code in RStudio
+  
+  pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/Dream3DLab (Groupfolder)/1.Projects/AIM_ALLImmune/3.Analysis/BEHAV3D_analysis/AIM_MB2_Exp19/BEHAV3D_config.yml")
+  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/Dream3DLab (Groupfolder)/1.Projects/AIM_ALLImmune/3.Analysis/BEHAV3D_analysis/behav3d_testing/old_dataset//BEHAV3D_config.yml")
+
+  } else {
   args <- commandArgs(trailingOnly = TRUE)
   pars <- yaml.load_file(args[1])
 }
@@ -95,15 +91,28 @@ pat = "*Speed"
 speed <- ldply(stat_folders, read_ims_csv, pattern=pat)
 
 # import mean dead dye intensity values
-pat = paste0("*Intensity_Mean_Ch=", pars$dead_dye_channel, "_Img=1")
-red_lym <- ldply(stat_folders, read_ims_csv, pattern=pat)
+# pat = paste0("*Intensity_Mean_Ch=", pars$dead_dye_channel, "_Img=1")
+# red_lym <- ldply(stat_folders, read_ims_csv, pattern=pat)
+datalist = list()
+for (i in 1:length(stat_folders)){
+  pat=paste0("*Intensity_Mean_Ch=", metadata$dead_dye_channel[i], "_Img=1")
+  print(pat)
+  datalist[[i]]=read_ims_csv(stat_folders[i], pat)
+}
+red_lym=do.call(rbind, datalist)
 
 # import Minimal distance to organoids
-pat = paste0("*Intensity_Min_Ch=", pars$dist_org_channel, "_Img=1")
-dist_org <- ldply(stat_folders, read_ims_csv, pattern=pat)
-
+# pat = paste0("*Intensity_Min_Ch=", pars$dist_org_channel, "_Img=1")
+# dist_org <- ldply(stat_folders, read_ims_csv, pattern=pat)
+datalist = list()
+for (i in 1:length(stat_folders)){
+  pat=paste0("*Intensity_Min_Ch=", metadata$organoid_distance_channel[i], "_Img=1")
+  print(pat)
+  datalist[[i]]=read_ims_csv(stat_folders[i], pat)
+}
+dist_org=do.call(rbind, datalist)
 # import Position
-pat = "*Position"
+pat = "*Position.csv"
 pos <- ldply(stat_folders, read_ims_csv, pattern=pat)
 
 ### Join all Imaris information
@@ -187,12 +196,9 @@ for ( m in unique(master$well)){
   List2[[length(List2)+1]] <-master_distance 
 }
 
-
 master_dist<-do.call(rbind, List2)
 colnames(master_dist)[which(names(master_dist) == "dist")] <- "nearest_Tcell"
-
-### Create a binary variable for Tcell contact based on distance
-master_dist$contact_lym<- ifelse(master_dist$nearest_Tcell<pars$tcell_contact_thr,1,0)
+master_dist$contact_lym <- ifelse(master_dist$nearest_Tcell<master_dist$tcell_contact_thr,1,0)
 
 ### Remove the variable TrackID and only use unique TrackID2 (unique identifier instead)
 master_dist$TrackID<-master_dist$TrackID2
@@ -261,7 +267,8 @@ time_series2_meanspeed<-na.omit(time_series2_meanspeed)
 master_corrected <- data
 
 ### Join the information on the cell line, experiment number and well number
-master_temp<- master[c("TrackID2", colnames(metadata)[-1])]
+master_temp<- master[c("TrackID2", colnames(metadata))]
+#master_temp<- master[c("TrackID2", colnames(metadata)[-1])]
 master_temp<-master_temp[!duplicated(master_temp$TrackID2),]
 master_corrected<- left_join(master_corrected, master_temp, by=c("TrackID"="TrackID2"))
 
@@ -271,7 +278,7 @@ master_corrected1<- merge(master_corrected, time_series2_meanspeed, by = c("Time
 ### Update the binary variable for contact with organoids
 ### It can vary between experiments depending on the intensity of the T cells or organoids. 
 ### Check the threshold of contact in the imaging data and update in the metadata csv
-master_corrected1$contact <- ifelse(master_corrected1$dist_org>master_corrected1$contact_threshold, 0,1)
+master_corrected1$contact <- ifelse(master_corrected1$dist_org>master_corrected1$organoid_contact_threshold, 0,1)
 
 ### Plot the number of touching vs. non-touching T cells
 library(ggplot2)
@@ -279,7 +286,7 @@ ggplot(master_corrected1, aes(x=contact, color=as.factor(exp_nr))) +
   geom_histogram(fill="white", alpha=0.5, position="identity")+facet_grid(organoid_line~well, scales = "free")
 
 ### Remove contact threshold variable
-master_corrected1$contact_threshold<-NULL
+master_corrected1$organoid_contact_threshold<-NULL
 
 ### For clustering it is necessary to compare T cell tracks that have a similar length. 
 ### For that we select cell track that have at least 100 timepoints. 
@@ -315,14 +322,17 @@ ggsave(
   device="png", height=210, width=297, units="mm"
 )
 
-master_corrected3deadT0 <-master_corrected2%>%group_by(TrackID)%>%filter((Time2==0) & red_lym<pars$dead_tcell_thr )
+### Filter out T cells that are dead at the start of the experiment
+master_corrected3deadT0 <-master_corrected2%>%group_by(TrackID)%>%filter((Time2==0) & red_lym<dead_dye_threshold )
+
 master_corrected3 <-master_corrected2%>%filter(TrackID %in% master_corrected3deadT0$TrackID )
 
 track_counts=left_join(track_counts, count_tracks(master_corrected3))
 colnames(track_counts)[colnames(track_counts)=="nr_tracks"]="filt_DeadCellStart"
 
 ### Create a binary variable for live or dead cells:
-master_corrected3$death<- ifelse(master_corrected3$red_lym<pars$dead_tcell_thr,0,1)
+master_corrected3$death<- ifelse(master_corrected3$red_lym<master_corrected3$dead_dye_threshold,0,1)
+
 ### Create a variable for cumulative interaction with organoids
 master_corrected3<-master_corrected3 %>% 
   group_by(TrackID) %>%mutate(contact2=(ave(contact, cumsum(!contact), FUN = cumsum)))
@@ -492,3 +502,4 @@ Per
 
 ggsave(paste0(output_dir,"RF_ClassProp_WellvsCelltype.png"), device="png")
 ggsave(paste0(output_dir,"RF_ClassProp_WellvsCelltype.pdf"), device="pdf")
+
