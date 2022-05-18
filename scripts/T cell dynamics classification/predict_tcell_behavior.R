@@ -1,4 +1,4 @@
-set.seed(1234)
+set.seed(12)
 getwd()
 library(plyr)
 library(readr)
@@ -14,10 +14,12 @@ library(yaml)
 if (interactive()) {
   ### Change the path to the BEHAV3D_config file here if running the code in RStudio
   
-  pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/Dream3DLab (Groupfolder)/1.Projects/AIM_ALLImmune/3.Analysis/BEHAV3D_analysis/AIM_MB2_Exp19/BEHAV3D_config.yml")
+  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/Dream3DLab (Groupfolder)/1.Projects/AIM_ALLImmune/3.Analysis/BEHAV3D_analysis/AIM_MB2_Exp19/BEHAV3D_config.yml")
+  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/Dream3DLab (Groupfolder)/1.Projects/AIM_ALLImmune/3.Analysis/BEHAV3D_analysis/AIM_MB2_Exp20/BEHAV3D_config.yml")
   # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/Dream3DLab (Groupfolder)/1.Projects/AIM_ALLImmune/3.Analysis/BEHAV3D_analysis/behav3d_testing/old_dataset//BEHAV3D_config.yml")
-
-  } else {
+  pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/Dream3DLab (Groupfolder)/1.Projects/AIM_ALLImmune/3.Analysis/BEHAV3D_analysis/combined_analysis/BEHAV3D_config.yml")
+  
+} else {
   args <- commandArgs(trailingOnly = TRUE)
   pars <- yaml.load_file(args[1])
 }
@@ -38,7 +40,7 @@ print(pars)
 # ### set directories where the files are located
 # working_directory <- pars$data_dir
 # setwd(working_directory)
-
+pars$data_dir = paste0(pars$data_dir,"/")
 output_dir=paste0(pars$output_dir,"/")
 model_path <- pars$randomforest
 
@@ -54,6 +56,10 @@ track_counts=metadata
 track_counts$name = paste(metadata$organoid_line, metadata$exp_nr, metadata$well)
 track_counts=track_counts[,c("name", "organoid_line")]
 
+# if ( any(is.na(metadata$stat_folder)) ){
+#   metadata$stat_folder=apply(metadata, 1, function(x) paste0(pars$data_dir, x["basename"], "_blue_Statistics"))
+# }
+# 
 if ( any(is.na(metadata$stat_folder)) ){
   metadata$stat_folder=apply(metadata, 1, function(x) paste0(pars$data_dir, x["basename"], "_Statistics"))
 }
@@ -140,7 +146,9 @@ ranks <- as.data.frame(ranks)
 ranks$filename <- row.names(ranks)
 master <- left_join(master, ranks) 
 master$TrackID2 <- with(master, interaction(ranks, TrackID, sep="_"))
-
+### Remove the variable TrackID and only use unique TrackID2 (unique identifier instead)
+master$TrackID<-master$TrackID2
+master$TrackID2<-NULL
 ### Remove filename
 master$filename<-NULL
 
@@ -165,7 +173,7 @@ colnames(track_counts)[colnames(track_counts)=="nr_tracks"]="filt_exp_duration"
 
 ### Perform check for duplciates, should be empty
 data_dup <- master%>%group_by(Time)%>%
-  dplyr::count(TrackID2) %>% 
+  dplyr::count(TrackID) %>% 
   filter(n > 1) %>% 
   select(-n)
 
@@ -200,9 +208,9 @@ master_dist<-do.call(rbind, List2)
 colnames(master_dist)[which(names(master_dist) == "dist")] <- "nearest_Tcell"
 master_dist$contact_lym <- ifelse(master_dist$nearest_Tcell<master_dist$tcell_contact_thr,1,0)
 
-### Remove the variable TrackID and only use unique TrackID2 (unique identifier instead)
-master_dist$TrackID<-master_dist$TrackID2
-master_dist$TrackID2<-NULL
+# ### Remove the variable TrackID and only use unique TrackID2 (unique identifier instead)
+# master_dist$TrackID<-master_dist$TrackID2
+# master_dist$TrackID2<-NULL
 
 library(reshape2)
 library(zoo)
@@ -267,10 +275,10 @@ time_series2_meanspeed<-na.omit(time_series2_meanspeed)
 master_corrected <- data
 
 ### Join the information on the cell line, experiment number and well number
-master_temp<- master[c("TrackID2", colnames(metadata))]
+master_temp<- master[c("TrackID", colnames(metadata))]
 #master_temp<- master[c("TrackID2", colnames(metadata)[-1])]
-master_temp<-master_temp[!duplicated(master_temp$TrackID2),]
-master_corrected<- left_join(master_corrected, master_temp, by=c("TrackID"="TrackID2"))
+master_temp<-master_temp[!duplicated(master_temp$TrackID),]
+master_corrected<- left_join(master_corrected, master_temp, by=c("TrackID"))
 
 ### Merge the information for the mean speed over the last 20 mins
 master_corrected1<- merge(master_corrected, time_series2_meanspeed, by = c("Time","TrackID"))
@@ -359,8 +367,8 @@ ggplot(melted_track_counts, aes(x=name, y=value, fill=variable)) +
 
 ggsave(
   paste0(output_dir,"NrCellTracks_filtering_perExp.png"), 
-       device="png", height=210, width=297, units="mm"
-  )
+  device="png", height=210, width=297, units="mm"
+)
 
 ggplot(melted_track_counts, aes(x=name, y=value, fill=organoid_line)) + 
   facet_grid(~variable)+
@@ -379,7 +387,7 @@ library(randomForest)
 # Load in the previously trained Random Forest model
 tryCatch(
   {
-  load(model_path)
+    load(model_path)
   },
   error=function(e) {
     message("Provided model path does not exist") 
@@ -449,17 +457,17 @@ for (cluster in unique(Percentage_clus$cluster2)){
     exp = as.integer(Percentage_clus[row, "exp_nr"])
     total_cell = as.integer(Number_cell_exp[
       Number_cell_exp$tcell_line==tcell_line &
-      Number_cell_exp$well==well &
-      Number_cell_exp$exp_nr==exp &
-      Number_cell_exp$organoid_line==organoid_line, "total_cell"
+        Number_cell_exp$well==well &
+        Number_cell_exp$exp_nr==exp &
+        Number_cell_exp$organoid_line==organoid_line, "total_cell"
     ])
     if (
       dim(
-              Percentage_clus[Percentage_clus$cluster2==cluster &
-              Percentage_clus$tcell_line==tcell_line &
-              Percentage_clus$well==well &
-              Percentage_clus$exp_nr==exp &
-              Percentage_clus$organoid_line==organoid_line,]
+        Percentage_clus[Percentage_clus$cluster2==cluster &
+                        Percentage_clus$tcell_line==tcell_line &
+                        Percentage_clus$well==well &
+                        Percentage_clus$exp_nr==exp &
+                        Percentage_clus$organoid_line==organoid_line,]
       )[1]==0
     ){
       extra_row=data.frame(
@@ -488,14 +496,14 @@ Per <- Per + facet_grid(interaction(tcell_line, exp_nr,well,organoid_line)  ~ tc
 
 # Per <- Per + facet_grid(interaction(exp_nr,well,organoid_line)  ~ interaction(organoid_line,tcell_line))
 Per<-Per+theme_void() + scale_fill_manual(values=c("gold3",
-                                                  "darkolivegreen3",
-                                                  "seagreen3",
-                                                  "forestgreen",
-                                                  "dodgerblue",
-                                                  "cyan1",
-                                                  "indianred",
-                                                  "firebrick",
-                                                  "brown1"))+
+                                                   "darkolivegreen3",
+                                                   "seagreen3",
+                                                   "forestgreen",
+                                                   "dodgerblue",
+                                                   "cyan1",
+                                                   "indianred",
+                                                   "firebrick",
+                                                   "brown1"))+
   theme(aspect.ratio = 0.2,strip.text.x = element_text(angle = 90))
 
 Per
