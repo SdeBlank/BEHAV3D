@@ -17,8 +17,8 @@ if (interactive()) {
   # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/Dream3DLab (Groupfolder)/1.Projects/AIM_ALLImmune/3.Analysis/BEHAV3D_analysis/AIM_MB2_Exp19/BEHAV3D_config.yml")
   # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/Dream3DLab (Groupfolder)/1.Projects/AIM_ALLImmune/3.Analysis/BEHAV3D_analysis/AIM_MB2_Exp20/BEHAV3D_config.yml")
   # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/Dream3DLab (Groupfolder)/1.Projects/AIM_ALLImmune/3.Analysis/BEHAV3D_analysis/behav3d_testing/old_dataset//BEHAV3D_config.yml")
-  pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/Dream3DLab (Groupfolder)/1.Projects/AIM_ALLImmune/3.Analysis/BEHAV3D_analysis/combined_analysis/BEHAV3D_config.yml")
-  
+  # pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/Dream3DLab (Groupfolder)/1.Projects/AIM_ALLImmune/3.Analysis/BEHAV3D_analysis/combined_analysis/BEHAV3D_config.yml")
+  pars = yaml.load_file("/Users/samdeblank/surfdrive/Shared/Dream3DLab (Groupfolder)/1.Projects/FUNC_OrganoidFunctionalHeterogeneity/3.Analysis/BEHAV3D/Exp041_Exp042/BEHAV3D_config.yml")
 } else {
   args <- commandArgs(trailingOnly = TRUE)
   pars <- yaml.load_file(args[1])
@@ -68,10 +68,12 @@ if ( any(is.na(metadata$stat_folder)) ){
 read_ims_csv <- function(stat_folder, pattern) {
   read_plus <- function(flnm) {
     read_csv(flnm, skip = 3, col_types = cols()) %>% 
-      mutate(filename = flnm)
+      mutate(filename = flnm) 
   }
   pattern_file <- list.files(path = stat_folder, pattern = pattern, full.names=TRUE)
-  print(pattern_file)
+  if (identical(pattern_file, character(0))){
+    print(paste("No file with pattern '", pattern, "' found for", stat_folder))
+  } 
   ims_csv <- read_plus(pattern_file)
   return(ims_csv)
 }
@@ -89,7 +91,7 @@ read_ims_csv <- function(stat_folder, pattern) {
 stat_folders <- metadata$stat_folder
 
 # import Displacement^2
-pat = "*Displacement"
+pat = "*Displacement\\^2"
 displacement=ldply(stat_folders, read_ims_csv, pattern=pat)
 
 # import Speed
@@ -103,8 +105,12 @@ datalist = list()
 for (i in 1:length(stat_folders)){
   pat=paste0("*Intensity_Mean_Ch=", metadata$dead_dye_channel[i], "_Img=1")
   print(pat)
-  datalist[[i]]=read_ims_csv(stat_folders[i], pat)
+  img_csv = read_ims_csv(stat_folders[i], pat)
+  if (!identical(img_csv, character(0))){
+    datalist[[i]]=img_csv
+  }
 }
+
 red_lym=do.call(rbind, datalist)
 
 # import Minimal distance to organoids
@@ -113,7 +119,7 @@ red_lym=do.call(rbind, datalist)
 datalist = list()
 for (i in 1:length(stat_folders)){
   pat=paste0("*Intensity_Min_Ch=", metadata$organoid_distance_channel[i], "_Img=1")
-  print(pat)
+  # print(pat)
   datalist[[i]]=read_ims_csv(stat_folders[i], pat)
 }
 dist_org=do.call(rbind, datalist)
@@ -304,6 +310,7 @@ detach("package:plyr", unload=TRUE)
 
 master_corrected2<-master_corrected1 %>% 
   group_by(TrackID) %>% arrange(TrackID)%>% filter(Time>00&Time<pars$exp_duration)%>% filter(n() >= pars$min_track_length)
+
 
 track_counts=left_join(track_counts, count_tracks(master_corrected2))
 colnames(track_counts)[colnames(track_counts)=="nr_tracks"]="filt_minLength"
