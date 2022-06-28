@@ -23,3 +23,13 @@ exp_duration: 300
 min_track_length: 30
 ### Maximum track length to take into analysis. Cut longer tracks to the length defined below
 max_track_length: 100
+
+###################################################################################
+### Optional parameters for behavioural clustering if no random forest provided ###
+###################################################################################
+# Decrease for more resolution
+umap_minimal_distance: 0.1
+# Increase if you have a larger number of cells
+umap_n_neighbors: 5
+
+nr_of_clusters: 6

@@ -137,7 +137,8 @@ Plot <- ggplot(live_deadROI6, aes(Time2,red_rs, color = Track2, group = Track2))
   ylab("dead dye intensity") + 
   xlab("Time (hours)") +
   theme(axis.text.x = element_text(size=20), axis.text.y = element_text(size=20), axis.title.y = element_text(size = 20), axis.title.x = element_text(size = 20), legend.text=element_text(size= 10))+
-  labs(color = "Organoid")
+  labs(color = "Organoid")+
+  facet_grid(organoid_line~well, scales = "free")
 ggtitle("Individual org increase in dead dye intensity TEG")
 
 Plot
